@@ -1,9 +1,8 @@
-import httpx
+from curl_cffi import requests as cffi_requests
 import os
 import jwt
 import datetime
 from typing import Optional
-from urllib.parse import urlparse, parse_qs
 from dotenv import dotenv_values
 from .exceptions import *
 
@@ -13,9 +12,6 @@ class RecNetLogin:
 
         Args:
             env_path (str, optional): Path to an .env.secret file if you stored your cookie there. Defaults to None.
-
-        Attrs:
-            client (httpx.Client): HTTPX client used to fetch the token. Can be reused.
 
         Raises:
             CookieMissing: Raises when the cookie cannot be found from either a .env.secret file or your system variables.
@@ -30,23 +26,24 @@ class RecNetLogin:
         # Get identity cookie
         key = "RN_SESSION_TOKEN"
         if key in env:
-            cookie = env[key]
+            self.cookie = env[key]
             self.is_local = True
         else:
             # If no local .env.secret file, look for globals
             if key in os.environ:
-                cookie = os.getenv(key)
+                self.cookie = os.getenv(key)
             else:
                 raise CookieMissing
 
-        # Initialize attributes
-        self.client: httpx.Client = httpx.Client()
+        # Initialize curl_cffi session
+        self.client = cffi_requests.Session(impersonate="chrome120")
 
         # Get CSRF token
-        self.client.cookies["__Host-next-auth.csrf-token"] = self.get_csrf_token()
-        
+        # As of 03/13/25 not required, if this breaks again first try to uncomment the next line
+        #self.client.cookies.set("__Host-next-auth.csrf-token", self.get_csrf_token(), domain="rec.net")
+
         # Include session token
-        self.client.cookies["__Secure-next-auth.session-token"] = cookie
+        self.client.cookies.set("__Secure-next-auth.session-token", self.cookie, domain="rec.net")
 
         # Fetch tokens
         self.__token: str = ""
@@ -56,9 +53,9 @@ class RecNetLogin:
         self.get_decoded_token()
 
         # Update client headers
-        self.client.headers = {
-            "Authorization": f"Bearer {self.__token}" 
-        }
+        self.client.headers.update({
+            "Authorization": f"Bearer {self.__token}"
+        })
 
     def get_csrf_token(self) -> str:
         resp = self.client.get("https://rec.net/api/auth/csrf")
@@ -91,11 +88,7 @@ class RecNetLogin:
         if int((datetime.datetime.now() + datetime.timedelta(minutes=15)).timestamp()) > self.decoded_token.get("exp", 0):
             # Less than 15 minutes, renew the token
 
-            # Get with cookie
-            auth_url = "https://rec.net/api/auth/session"
-            resp = self.client.get(auth_url)
-
-            # Get response
+            resp = self.client.get("https://rec.net/api/auth/session")
             data = resp.json()
 
             try:
@@ -108,9 +101,9 @@ class RecNetLogin:
             self.decoded_token = self.__decode_token(self.__token)
 
         return f"Bearer {self.__token}" if include_bearer else self.__token
-    
+
     def close(self) -> None:
-        """Closes the HTTPX client."""
+        """Closes the curl_cffi session."""
         self.client.close()
 
     def __decode_token(self, token: str) -> dict:
@@ -122,7 +115,6 @@ class RecNetLogin:
         Returns:
             dict: Decoded bearer token
         """
-        
         decoded = jwt.decode(token, options={"verify_signature": False})
         return decoded
 
@@ -130,12 +122,12 @@ class RecNetLogin:
 if __name__ == "__main__":
     rnl = RecNetLogin()
 
-    r = httpx.get(
-        url="https://accounts.rec.net/account/me", 
+    r = rnl.client.get(
+        url="https://accounts.rec.net/account/me",
         headers={
             # Always run the "get_token" method when using your token!
             # RecNetLogin will automatically renew the token if it has expired.
-            "Authorization": rnl.get_token(include_bearer=True)  
+            "Authorization": rnl.get_token(include_bearer=True)
         }
     )
 
