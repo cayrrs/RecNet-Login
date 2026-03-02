@@ -74,7 +74,7 @@ from recnetlogin import RecNetLogin
 
 rnl = RecNetLogin(env_path=".env.secret")
 
-# Fetch using RecNetLogin's HTTPX client
+# Fetch using RecNetLogin's curl_cffi client
 r = rnl.client.get("https://accounts.rec.net/account/me")
 
 for key, value in r.json().items():
