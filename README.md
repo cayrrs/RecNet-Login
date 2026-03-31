@@ -1,3 +1,10 @@
+# Due to Rec Room shutting down on June 1st 2026, this repo will now be archived.
+
+"Give it your Rec Room Best!" - Coach
+
+
+
+
 ![rnl](https://github.com/Jegarde/RecNet-Login/assets/13438202/5d25fa39-6d8f-4717-82c8-619574036817)
 This is a Python package that allows you to acquire your [RecNet](https://rec.net/) access token and more with your cookie! 🍪
 
